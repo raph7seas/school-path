@@ -114,8 +114,8 @@ function mount(html, email){
   foot.innerHTML = 'Signed in as <span></span> &middot; <button class="link" type="button" style="background:none;border:0;color:inherit;text-decoration:underline;font:inherit;cursor:pointer">Sign out</button>';
   foot.querySelector('span').textContent = email; foot.querySelector('button').onclick = () => sb.auth.signOut();
   document.body.appendChild(foot);
-  // Scripts added through a parser do not run; re-create them so they do, in order.
-  document.body.querySelectorAll('script').forEach(old => { const s = document.createElement('script'); s.textContent = old.textContent; old.replaceWith(s); });
+  // Scripts added through a parser do not run; re-create them so they do, in order. Only the app's own, never this page's.
+  nodes.flatMap(n => n.tagName === 'SCRIPT' ? [n] : n.querySelectorAll ? [...n.querySelectorAll('script')] : []).forEach(old => { const s = document.createElement('script'); s.textContent = old.textContent; old.replaceWith(s); });
 }
 
 // ---- the same window.claude the page uses inside claude.ai, backed by Supabase ----
