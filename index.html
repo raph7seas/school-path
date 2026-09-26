@@ -193,20 +193,23 @@ function shim(session){
   // Ask Claude runs through the family's own edge function. The page's tools run here, in the page.
   async function sample(turns, opts = {}){
     const tools = opts.tools || [], messages = turns.map(t => ({ role: t.role, content: t.content }));
-    let text = '';
-    for (let round = 0; round < 4; round++){ // ponytail: one tool (save_note), so a few rounds is plenty
+    let text = ''; const sources = new Map();
+    for (let round = 0; round < 8; round++){ // ponytail: page tools and up to 3 web searches, so 8 rounds is plenty
       let res;
       try {
         const { data: { session: s } } = await sb.auth.getSession();
         res = await fetch(URL_ + '/functions/v1/ask', { method: 'POST', signal: opts.signal,
           headers: { 'Content-Type': 'application/json', apikey: KEY, Authorization: 'Bearer ' + s.access_token },
-          body: JSON.stringify({ messages, tools: tools.length > 0 }) });
+          body: JSON.stringify({ messages, tools: tools.length > 0, system: opts.system }) });
       } catch (e) { throw Object.assign(new Error('cancelled'), { code: e.name === 'AbortError' ? 'cancelled' : 'unavailable', text }); }
       const out = await res.json().catch(() => ({}));
       if (!res.ok || out.code) throw Object.assign(new Error(out.message || 'Ask failed'), { code: out.code || (res.status === 401 ? 'session_expired' : 'unavailable'), text });
       const said = out.content.filter(b => b.type === 'text').map(b => b.text).join('');
+      out.content.forEach(b => (b.citations || []).forEach(c => c.url && sources.set(c.url, c.title || c.url))); // web search sources
       text += (text && said ? '\n\n' : '') + said;
+      if (out.stop_reason === 'pause_turn'){ messages.push({ role: 'assistant', content: out.content }); continue; } // a long web search: let it carry on
       if (out.stop_reason !== 'tool_use'){
+        if (sources.size) text += '\n\nSources:\n\n' + [...sources].slice(0, 5).map(([u, t]) => `- [${t}](${u})`).join('\n');
         if (!text) throw Object.assign(new Error('empty'), { code: 'empty_completion' });
         opts.onText && opts.onText({ text, delta: said });
         return { text, truncated: out.stop_reason === 'max_tokens' };
